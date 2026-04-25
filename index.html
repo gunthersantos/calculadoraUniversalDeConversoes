@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora Universal de Conversões</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React e ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc', 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1', 800: '#075985', 900: '#0c4a6e' },
+                        glass: 'rgba(255, 255, 255, 0.1)',
+                        glassBorder: 'rgba(255, 255, 255, 0.2)',
+                    },
+                    backdropBlur: {
+                        xs: '2px',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            outline: none;
+        }
+
+        .glass-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .category-btn.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .swap-btn:hover {
+            transform: rotate(180deg);
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        // ============================================
+        // DADOS DE CONVERSÃO (Fatores SI precisos)
+        // ============================================
+        const conversionData = {
+            comprimento: {
+                name: 'Comprimento',
+                icon: 'ph-ruler',
+                units: {
+                    mm: { name: 'Milímetro', factor: 0.001 },
+                    cm: { name: 'Centímetro', factor: 0.01 },
+                    m: { name: 'Metro', factor: 1 },
+                    km: { name: 'Quilômetro', factor: 1000 },
+                    pol: { name: 'Polegada', factor: 0.0254 },
+                    ft: { name: 'Pé', factor: 0.3048 },
+                    yd: { name: 'Jarda', factor: 0.9144 },
+                    mi: { name: 'Milha', factor: 1609.344 }
+                }
+            },
+            massa: {
+                name: 'Massa',
+                icon: 'ph-scales',
+                units: {
+                    mg: { name: 'Miligrama', factor: 0.000001 },
+                    g: { name: 'Grama', factor: 0.001 },
+                    kg: { name: 'Quilograma', factor: 1 },
+                    ton: { name: 'Tonelada', factor: 1000 },
+                    lb: { name: 'Libra', factor: 0.45359237 },
+                    oz: { name: 'Onça', factor: 0.0283495 }
+                }
+            },
+            temperatura: {
+                name: 'Temperatura',
+                icon: 'ph-thermometer',
+                units: {
+                    c: { name: 'Celsius' },
+                    f: { name: 'Fahrenheit' },
+                    k: { name: 'Kelvin' }
+                }
+            },
+            velocidade: {
+                name: 'Velocidade',
+                icon: 'ph-gauge',
+                units: {
+                    'm/s': { name: 'Metro/segundo', factor: 1 },
+                    'km/h': { name: 'Km/hora', factor: 0.277778 },
+                    mph: { name: 'Milhas/hora', factor: 0.44704 },
+                    no: { name: 'Nó', factor: 0.514444 }
+                }
+            },
+            volume: {
+                name: 'Volume',
+                icon: 'ph-drop',
+                units: {
+                    ml: { name: 'Mililitro', factor: 0.000001 },
+                    l: { name: 'Litro', factor: 0.001 },
+                    'm3': { name: 'Metro cúbico', factor: 1 },
+                    gal: { name: 'Galão (US)', factor: 0.00378541 },
+                    'fl oz': { name: 'Onça fluida (US)', factor: 0.0000295735 }
+                }
+            },
+            area: {
+                name: 'Área',
+                icon: 'ph-square',
+                units: {
+                    'cm2': { name: 'Centímetro²', factor: 0.0001 },
+                    'm2': { name: 'Metro²', factor: 1 },
+                    ha: { name: 'Hectare', factor: 10000 },
+                    'km2': { name: 'Quilômetro²', factor: 1000000 },
+                    acre: { name: 'Acre', factor: 4046.86 }
+                }
+            },
+            tempo: {
+                name: 'Tempo',
+                icon: 'ph-clock',
+                units: {
+                    ms: { name: 'Milissegundo', factor: 0.001 },
+                    s: { name: 'Segundo', factor: 1 },
+                    min: { name: 'Minuto', factor: 60 },
+                    h: { name: 'Hora', factor: 3600 },
+                    dia: { name: 'Dia', factor: 86400 },
+                    sem: { name: 'Semana', factor: 604800 },
+                    mes: { name: 'Mês (30d)', factor: 2592000 },
+                    ano: { name: 'Ano (365d)', factor: 31536000 }
+                }
+            },
+            dados: {
+                name: 'Dados Digitais',
+                icon: 'ph-hard-drives',
+                units: {
+                    b: { name: 'Bit', factor: 1 },
+                    B: { name: 'Byte', factor: 8 },
+                    KB: { name: 'Kilobyte', factor: 8192 },
+                    MB: { name: 'Megabyte', factor: 8388608 },
+                    GB: { name: 'Gigabyte', factor: 8589934592 },
+                    TB: { name: 'Terabyte', factor: 8796093022208 }
+                }
+            }
+        };
+
+        // ============================================
+        // FUNÇÕES DE CONVERSÃO
+        // ============================================
+        function convertValue(value, fromUnit, toUnit, category) {
+            if (isNaN(value) || value === '') return '';
+            const numValue = parseFloat(value);
+
+            if (category === 'temperatura') {
+                return convertTemperature(numValue, fromUnit, toUnit);
+            }
+
+            const fromFactor = conversionData[category].units[fromUnit].factor;
+            const toFactor = conversionData[category].units[toUnit].factor;
+            const baseValue = numValue * fromFactor;
+            const result = baseValue / toFactor;
+
+            return formatResult(result);
+        }
+
+        function convertTemperature(value, from, to) {
+            if (from === to) return formatResult(value);
+
+            let celsius;
+            // Converter para Celsius primeiro
+            switch(from) {
+                case 'c': celsius = value; break;
+                case 'f': celsius = (value - 32) * 5/9; break;
+                case 'k': celsius = value - 273.15; break;
+            }
+
+            // Converter de Celsius para destino
+            switch(to) {
+                case 'c': return formatResult(celsius);
+                case 'f': return formatResult((celsius * 9/5) + 32);
+                case 'k': return formatResult(celsius + 273.15);
+            }
+        }
+
+        function formatResult(value) {
+            if (Math.abs(value) < 0.000001 || Math.abs(value) > 1000000000) {
+                return value.toExponential(6);
+            }
+            // Remover zeros desnecessários
+            return parseFloat(value.toPrecision(10)).toString();
+        }
+
+        // ============================================
+        // COMPONENTES
+        // ============================================
+
+        // Header Component
+        function Header() {
+            return (
+                <motion.header 
+                    initial={{ y: -50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    className="text-center mb-8 pt-8"
+                >
+                    <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                        className="inline-flex items-center justify-center w-16 h-16 rounded-2xl glass-card mb-4"
+                    >
+                        <i className="ph ph-arrows-left-right text-3xl text-white"></i>
+                    </motion.div>
+                    <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+                        Calculadora Universal
+                    </h1>
+                    <p className="text-white/70 text-sm md:text-base">
+                        Conversões precisas para todas as medidas
+                    </p>
+                </motion.header>
+            );
+        }
+
+        // Category Selector
+        function CategorySelector({ activeCategory, onSelect }) {
+            return (
+                <motion.div 
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.3, duration: 0.5 }}
+                    className="mb-6"
+                >
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        {Object.entries(conversionData).map(([key, data], index) => (
+                            <motion.button
+                                key={key}
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.1 * index }}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => onSelect(key)}
+                                className={`category-btn flex items-center gap-2 px-4 py-2 rounded-xl glass-card text-white text-sm font-medium transition-all duration-300 ${
+                                    activeCategory === key ? 'active shadow-lg shadow-white/10' : 'hover:bg-white/20'
+                                }`}
+                            >
+                                <i className={`ph ${data.icon} text-lg`}></i>
+                                <span className="hidden sm:inline">{data.name}</span>
+                            </motion.button>
+                        ))}
+                    </div>
+                </motion.div>
+            );
+        }
+
+        // Converter Card
+        function ConverterCard({ category, onConvert, history, setHistory }) {
+            const [inputValue, setInputValue] = useState('1');
+            const [fromUnit, setFromUnit] = useState(Object.keys(conversionData[category].units)[0]);
+            const [toUnit, setToUnit] = useState(Object.keys(conversionData[category].units)[1] || Object.keys(conversionData[category].units)[0]);
+            const [result, setResult] = useState('');
+            const [isSwapping, setIsSwapping] = useState(false);
+
+            const units = conversionData[category].units;
+            const unitKeys = Object.keys(units);
+
+            useEffect(() => {
+                // Resetar unidades quando muda de categoria
+                setFromUnit(unitKeys[0]);
+                setToUnit(unitKeys[1] || unitKeys[0]);
+                setInputValue('1');
+            }, [category]);
+
+            useEffect(() => {
+                const res = convertValue(inputValue, fromUnit, toUnit, category);
+                setResult(res);
+            }, [inputValue, fromUnit, toUnit, category]);
+
+            const handleSwap = () => {
+                setIsSwapping(true);
+                setTimeout(() => setIsSwapping(false), 300);
+                const temp = fromUnit;
+                setFromUnit(toUnit);
+                setToUnit(temp);
+            };
+
+            const handleSave = () => {
+                if (!inputValue || !result) return;
+                const newEntry = {
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleString('pt-BR'),
+                    category: conversionData[category].name,
+                    from: `${inputValue} ${units[fromUnit].name}`,
+                    to: `${result} ${units[toUnit].name}`,
+                    fromUnit,
+                    toUnit,
+                    value: inputValue,
+                    result,
+                    categoryKey: category
+                };
+                const updatedHistory = [newEntry, ...history].slice(0, 50);
+                setHistory(updatedHistory);
+                localStorage.setItem('conversionHistory', JSON.stringify(updatedHistory));
+            };
+
+            const handleCopy = () => {
+                navigator.clipboard.writeText(result);
+            };
+
+            return (
+                <motion.div
+                    key={category}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4 }}
+                    className="glass-panel rounded-3xl p-6 md:p-8 max-w-2xl mx-auto"
+                >
+                    <div className="flex items-center justify-center gap-2 mb-6">
+                        <i className={`ph ${conversionData[category].icon} text-2xl text-white/80`}></i>
+                        <h2 className="text-xl font-semibold text-white">{conversionData[category].name}</h2>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Input Section */}
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-end">
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm font-medium ml-1">De</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        value={inputValue}
+                                        onChange={(e) => setInputValue(e.target.value)}
+                                        className="glass-input rounded-xl px-4 py-3 w-full text-lg font-semibold"
+                                        placeholder="Valor"
+                                    />
+                                    <select
+                                        value={fromUnit}
+                                        onChange={(e) => setFromUnit(e.target.value)}
+                                        className="glass-input rounded-xl px-3 py-3 min-w-[100px] text-sm font-medium cursor-pointer"
+                                    >
+                                        {unitKeys.map(key => (
+                                            <option key={key} value={key} className="text-gray-800">
+                                                {key}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <p className="text-white/50 text-xs ml-1">{units[fromUnit].name}</p>
+                            </div>
+
+                            {/* Swap Button */}
+                            <div className="flex justify-center md:pb-6">
+                                <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    animate={{ rotate: isSwapping ? 180 : 0 }}
+                                    transition={{ duration: 0.3 }}
+                                    onClick={handleSwap}
+                                    className="swap-btn w-12 h-12 rounded-full glass-card flex items-center justify-center text-white hover:bg-white/30 transition-all duration-300"
+                                >
+                                    <i className="ph ph-arrows-left-right text-xl"></i>
+                                </motion.button>
+                            </div>
+
+                            {/* Output Section */}
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm font-medium ml-1">Para</label>
+                                <div className="flex gap-2">
+                                    <div className="glass-input rounded-xl px-4 py-3 w-full text-lg font-semibold bg-white/10 flex items-center min-h-[50px]">
+                                        {result || '---'}
+                                    </div>
+                                    <select
+                                        value={toUnit}
+                                        onChange={(e) => setToUnit(e.target.value)}
+                                        className="glass-input rounded-xl px-3 py-3 min-w-[100px] text-sm font-medium cursor-pointer"
+                                    >
+                                        {unitKeys.map(key => (
+                                            <option key={key} value={key} className="text-gray-800">
+                                                {key}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <p className="text-white/50 text-xs ml-1">{units[toUnit].name}</p>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3 justify-center pt-4">
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={handleSave}
+                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-medium transition-all duration-200"
+                            >
+                                <i className="ph ph-floppy-disk"></i>
+                                Salvar
+                            </motion.button>
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={handleCopy}
+                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-medium transition-all duration-200"
+                            >
+                                <i className="ph ph-copy"></i>
+                                Copiar
+                            </motion.button>
+                        </div>
+                    </div>
+                </motion.div>
+            );
+        }
+
+        // History Panel
+        function HistoryPanel({ history, setHistory, onRestore }) {
+            const [isOpen, setIsOpen] = useState(false);
+
+            const handleClear = () => {
+                setHistory([]);
+                localStorage.removeItem('conversionHistory');
+            };
+
+            const handleDelete = (id) => {
+                const updated = history.filter(h => h.id !== id);
+                setHistory(updated);
+                localStorage.setItem('conversionHistory', JSON.stringify(updated));
+            };
+
+            return (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                    className="max-w-2xl mx-auto mt-6"
+                >
+                    <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="w-full glass-panel rounded-2xl p-4 flex items-center justify-between text-white"
+                    >
+                        <div className="flex items-center gap-3">
+                            <i className="ph ph-clock-counter-clockwise text-xl"></i>
+                            <span className="font-medium">Histórico de Conversões</span>
+                            {history.length > 0 && (
+                                <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
+                                    {history.length}
+                                </span>
+                            )}
+                        </div>
+                        <motion.i 
+                            animate={{ rotate: isOpen ? 180 : 0 }}
+                            className="ph ph-caret-down text-lg"
+                        ></motion.i>
+                    </motion.button>
+
+                    <AnimatePresence>
+                        {isOpen && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="overflow-hidden"
+                            >
+                                <div className="glass-panel rounded-2xl mt-2 p-4 max-h-[400px] overflow-y-auto">
+                                    {history.length === 0 ? (
+                                        <div className="text-center text-white/50 py-8">
+                                            <i className="ph ph-clock text-4xl mb-2 block"></i>
+                                            <p>Nenhuma conversão salva ainda</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {history.map((item, index) => (
+                                                <motion.div
+                                                    key={item.id}
+                                                    initial={{ opacity: 0, x: -20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    transition={{ delay: index * 0.05 }}
+                                                    className="glass-card rounded-xl p-3 flex items-center justify-between group hover:bg-white/20 transition-all"
+                                                >
+                                                    <div 
+                                                        className="flex-1 cursor-pointer"
+                                                        onClick={() => onRestore(item)}
+                                                    >
+                                                        <div className="flex items-center gap-2 text-xs text-white/60 mb-1">
+                                                            <span>{item.timestamp}</span>
+                                                            <span className="bg-white/10 px-1.5 py-0.5 rounded">{item.category}</span>
+                                                        </div>
+                                                        <div className="text-white text-sm font-medium">
+                                                            {item.from} <i className="ph ph-arrow-right mx-1 text-white/50"></i> {item.to}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => onRestore(item)}
+                                                            className="p-1.5 rounded-lg hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+                                                            title="Restaurar"
+                                                        >
+                                                            <i className="ph ph-arrow-u-up-left"></i>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(item.id)}
+                                                            className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/70 hover:text-red-300 transition-colors"
+                                                            title="Excluir"
+                                                        >
+                                                            <i className="ph ph-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                            {history.length > 0 && (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.01 }}
+                                                    whileTap={{ scale: 0.99 }}
+                                                    onClick={handleClear}
+                                                    className="w-full mt-3 py-2 rounded-xl border border-red-400/30 text-red-300 hover:bg-red-500/10 transition-all text-sm font-medium"
+                                                >
+                                                    Limpar Todo o Histórico
+                                                </motion.button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </motion.div>
+            );
+        }
+
+        // Main App
+        function App() {
+            const [activeCategory, setActiveCategory] = useState('comprimento');
+            const [history, setHistory] = useState(() => {
+                const saved = localStorage.getItem('conversionHistory');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const handleRestore = (item) => {
+                setActiveCategory(item.categoryKey);
+                // O ConverterCard vai detectar a mudança de categoria e resetar
+                // Precisamos passar os valores via props ou context
+                // Simplificação: apenas muda a categoria
+            };
+
+            return (
+                <div className="min-h-screen pb-12 px-4">
+                    <Header />
+                    <CategorySelector 
+                        activeCategory={activeCategory} 
+                        onSelect={setActiveCategory} 
+                    />
+                    <AnimatePresence mode="wait">
+                        <ConverterCard
+                            key={activeCategory}
+                            category={activeCategory}
+                            history={history}
+                            setHistory={setHistory}
+                        />
+                    </AnimatePresence>
+                    <HistoryPanel 
+                        history={history} 
+                        setHistory={setHistory}
+                        onRestore={handleRestore}
+                    />
+
+                    {/* Footer */}
+                    <motion.footer
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.8 }}
+                        className="text-center mt-12 text-white/40 text-sm"
+                    >
+                        <p>Calculadora Universal © 2026 • Gunther dos Santos</p>
+                    </motion.footer>
+                </div>
+            );
+        }
+
+        // Render
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
